@@ -338,6 +338,20 @@ locals {
   ])
 }
 
+resource "aws_s3_bucket_notification" "email_delivery_data" {
+  bucket = module.email_delivery_bucket.bucket_id
+
+  lambda_function {
+    lambda_function_arn = module.PrepareFFISEmail.lambda_function_arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "ses/ffis_ingest/new"
+  }
+
+  depends_on = [
+    module.PrepareFFISEmail,
+  ]
+}
+
 resource "aws_s3_bucket_notification" "grant_source_data" {
   bucket = module.grants_source_data_bucket.bucket_id
 
@@ -422,4 +436,23 @@ module "EnqueueFFISDownload" {
     module.grants_source_data_bucket,
     aws_sqs_queue.ffis_downloads,
   ]
+}
+
+module "PrepareFFISEmail" {
+  source = "./modules/PrepareFFISEmail"
+
+  namespace                                    = var.namespace
+  function_name                                = "PrepareFFISEmail"
+  permissions_boundary_arn                     = local.permissions_boundary_arn
+  lambda_artifact_bucket                       = module.lambda_artifacts_bucket.bucket_id
+  log_retention_in_days                        = var.lambda_default_log_retention_in_days
+  log_level                                    = var.lambda_default_log_level
+  lambda_code_path                             = local.lambda_code_path
+  lambda_arch                                  = var.lambda_arch
+  additional_environment_variables             = local.lambda_environment_variables
+  additional_lambda_execution_policy_documents = local.lambda_execution_policies
+  lambda_layer_arns                            = local.lambda_layer_arns
+
+  ffis_email_delivery_bucket_name = module.email_delivery_bucket.bucket_id
+  grants_source_data_bucket_name  = module.grants_source_data_bucket.bucket_id
 }
