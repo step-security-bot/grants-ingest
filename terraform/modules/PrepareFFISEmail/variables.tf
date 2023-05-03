@@ -81,3 +81,8 @@ variable "ffis_email_delivery_bucket_name" {
   description = "Name of the S3 bucket used to receive FFIS emails via SES."
   type        = string
 }
+
+variable "ffis_digest_email_address" {
+  description = "Email address that sends the FFIS Digest"
+  type        = string
+}

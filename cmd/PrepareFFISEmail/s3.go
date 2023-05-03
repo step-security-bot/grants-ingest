@@ -3,11 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"errors"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsTransport "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
@@ -34,25 +31,6 @@ type S3PutObjectAPI interface {
 type S3ReadWriteObjectAPI interface {
 	S3ReadObjectAPI
 	S3PutObjectAPI
-}
-
-// GetS3LastModified gets the "Last Modified" time for the S3 object.
-// If the object exists, a pointer to the last modification time is returned along with a nil error.
-// If the specified object does not exist, the returned *time.Time and error are both nil.
-// If an error is encountered when calling the HeadObject S3 API method, this will return a nil
-// *time.Time value along with the encountered error.
-func GetS3LastModified(ctx context.Context, c s3.HeadObjectAPIClient, bucket, key string) (*time.Time, error) {
-	headOutput, err := c.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key)})
-	if err != nil {
-		var respError *awsTransport.ResponseError
-		if errors.As(err, &respError) && respError.ResponseError.HTTPStatusCode() == 404 {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return headOutput.LastModified, nil
 }
 
 // UploadS3Object uploads bytes read from from r to an S3 object at the given bucket and key.

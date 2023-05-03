@@ -453,6 +453,7 @@ module "PrepareFFISEmail" {
   additional_lambda_execution_policy_documents = local.lambda_execution_policies
   lambda_layer_arns                            = local.lambda_layer_arns
 
+  ffis_digest_email_address       = var.ffis_digest_email_address
   ffis_email_delivery_bucket_name = module.email_delivery_bucket.bucket_id
   grants_source_data_bucket_name  = module.grants_source_data_bucket.bucket_id
 }

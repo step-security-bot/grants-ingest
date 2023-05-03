@@ -189,6 +189,11 @@ variable "ffis_ingest_email_address" {
   default     = "ffis-ingest@grants.usdigitalresponse.org"
 }
 
+variable "ffis_digest_email_address" {
+  type        = string
+  description = "Email address that sends FFIS digests"
+}
+
 variable "ses_active_receipt_rule_set_enabled" {
   description = "If false, prevents SES receipt rule set from being set to active. This should only be false in local development."
   type        = bool

@@ -52,7 +52,7 @@ module "lambda_execution_policy" {
       effect  = "Allow"
       actions = ["s3:PutObject"]
       resources = [
-        "${data.aws_s3_bucket.prepared_data.arn}/sources/*/*/*/ffis/raw.eml"
+        "${data.aws_s3_bucket.source_data.arn}/sources/*/*/*/ffis/raw.eml"
       ]
     }
   }
@@ -96,6 +96,7 @@ module "lambda_function" {
     DD_TAGS                        = join(",", sort([for k, v in local.dd_tags : "${k}:${v}"]))
     DOWNLOAD_CHUNK_LIMIT           = "20"
     GRANTS_SOURCE_DATA_BUCKET_NAME = data.aws_s3_bucket.source_data.id
+    FFIS_DIGEST_EMAIL_ADDRESS      = var.ffis_digest_email_address
     LOG_LEVEL                      = var.log_level
     MAX_CONCURRENT_UPLOADS         = "10"
     S3_USE_PATH_STYLE              = "true"

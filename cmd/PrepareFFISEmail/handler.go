@@ -57,7 +57,7 @@ func handleS3EventWithConfig(s3svc *s3.Client, ctx context.Context, s3Event even
 
 				data, err := io.ReadAll(resp.Body)
 				if err != nil {
-					log.Error(logger, "Error reading source opportunity from S3", err)
+					log.Error(logger, "Error reading source S3 object", err)
 					return err
 				}
 
@@ -85,30 +85,38 @@ func processEmail(ctx context.Context, svc *s3.Client, b []byte) error {
 		return log.Errorf(logger, "Error parsing email data from S3", err)
 	}
 
-	header := email.Header
-	mailFrom, err := mail.ParseAddress(header.Get("From"))
+	address, s3ObjectKey, err := processHeader(email.Header)
 	if err != nil {
-		return log.Errorf(logger, "Error parsing email address", err)
+		return log.Errorf(logger, "Error extracting data from email header", err)
 	}
 
-	mailDate := header.Get("Date")
-	logger := log.With(logger, "FROM", mailFrom.Address, "DATE", mailDate)
+	logger := log.With(logger, "FROM", address)
 
-	if !strings.Contains(mailFrom.Address, env.ValidFFISEmail) {
+	if !strings.Contains(address, env.ValidFFISEmail) {
 		return log.Errorf(logger, "Origin email address does not match FFIS address", errors.New("Invalid email address"))
 	}
 
-	mailDateTime, err := mail.ParseDate(mailDate)
-	if err != nil {
-		return log.Errorf(logger, "Error parsing date for S3 object key", err)
-	}
-	s3ObjectKey := fmt.Sprintf("sources/%d/%d/%d/ffis/raw.eml", mailDateTime.Year(), mailDateTime.Month(), mailDateTime.Day())
-
 	if err = UploadS3Object(ctx, svc, env.SourceDataBucket, s3ObjectKey, b); err != nil {
-		return log.Errorf(logger, "Error uploading prepared grant opportunity to DynamoDB", err)
+		return log.Errorf(logger, "Error uploading S3 object to Grants source data bucket", err)
 	}
 
 	log.Info(logger, "Successfully moved email")
 	sendMetric("email.moved", 1)
 	return nil
+}
+
+func processHeader(h mail.Header) (string, string, error) {
+	mailFrom, err := mail.ParseAddress(h.Get("From"))
+	if err != nil {
+		return "", "", err
+	}
+
+	mailDateTime, err := mail.ParseDate(h.Get("Date"))
+	if err != nil {
+		return "", "", err
+	}
+
+	s3ObjectKey := fmt.Sprintf("sources/%d/%d/%d/ffis/raw.eml", mailDateTime.Year(), mailDateTime.Month(), mailDateTime.Day())
+
+	return mailFrom.Address, s3ObjectKey, nil
 }
