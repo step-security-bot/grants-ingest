@@ -21,13 +21,11 @@ const (
 )
 
 // handleS3Event handles events representing S3 bucket notifications of type "ObjectCreated:*"
-// for XML DB extracts saved from Grants.gov and split into separate files via the SplitGrantsGovXMLDB Lambda.
-// The XML data from the source S3 object provided represents an individual grant opportunity.
+// for FFIS email digests delivered to an S3 bucket via SES.
 // Returns an error that represents any and all errors accumulated during the invocation,
 // either while handling a source object or while processing its contents; an error may indicate
 // a partial or complete invocation failure.
-// Returns nil when all grant opportunities are successfully processed from all source records,
-// indicating complete success.
+// Returns nil when all emails are successfully processed, indicating complete success.
 func handleS3EventWithConfig(s3svc *s3.Client, ctx context.Context, s3Event events.S3Event) error {
 	wg := multierror.Group{}
 	for _, record := range s3Event.Records {
@@ -37,7 +35,7 @@ func handleS3EventWithConfig(s3svc *s3.Client, ctx context.Context, s3Event even
 				defer span.Finish(tracer.WithError(err))
 				defer func() {
 					if err != nil {
-						sendMetric("opportunity.failed", 1)
+						sendMetric("email.failed", 1)
 					}
 				}()
 
@@ -55,13 +53,13 @@ func handleS3EventWithConfig(s3svc *s3.Client, ctx context.Context, s3Event even
 					return err
 				}
 
-				data, err := io.ReadAll(resp.Body)
-				if err != nil {
-					log.Error(logger, "Error reading source S3 object", err)
-					return err
-				}
+				// data, err := io.ReadAll(resp.Body)
+				// if err != nil {
+				// 	log.Error(logger, "Error reading source S3 object", err)
+				// 	return err
+				// }
 
-				return processEmail(ctx, s3svc, data)
+				return processEmail(ctx, s3svc, resp.Body)
 			})
 		}(record)
 	}
@@ -76,9 +74,17 @@ func handleS3EventWithConfig(s3svc *s3.Client, ctx context.Context, s3Event even
 	return nil
 }
 
-// processOpportunity takes a single opportunity and uploads an XML representation of the
-// opportunity to its configured DynamoDB table.
-func processEmail(ctx context.Context, svc *s3.Client, b []byte) error {
+// processEmail takes a single email, extracts the sender address and date from the header
+// then checks the address against ValidFFISEmail to make sure it came from a valid source.
+// If the check passes, the contents of the email are written to an object in our Grant Source
+// data S3 bucket with the object key being derived from the email's sent date.
+func processEmail(ctx context.Context, svc S3ReadWriteObjectAPI, r io.Reader) error {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		log.Error(logger, "Error reading source S3 object", err)
+		return err
+	}
+
 	emailData := strings.NewReader(string(b))
 	email, err := mail.ReadMessage(emailData)
 	if err != nil {
@@ -96,7 +102,7 @@ func processEmail(ctx context.Context, svc *s3.Client, b []byte) error {
 		return log.Errorf(logger, "Origin email address does not match FFIS address", errors.New("Invalid email address"))
 	}
 
-	if err = UploadS3Object(ctx, svc, env.SourceDataBucket, s3ObjectKey, b); err != nil {
+	if err = UploadS3Object(ctx, svc, env.SourceDataBucket, s3ObjectKey, r); err != nil {
 		return log.Errorf(logger, "Error uploading S3 object to Grants source data bucket", err)
 	}
 

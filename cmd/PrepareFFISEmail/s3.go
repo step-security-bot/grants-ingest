@@ -1,8 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -33,14 +33,14 @@ type S3ReadWriteObjectAPI interface {
 	S3PutObjectAPI
 }
 
-// UploadS3Object uploads bytes read from from r to an S3 object at the given bucket and key.
+// UploadS3Object uploads bytes to an S3 object at the given bucket and key.
 // If an error was encountered during upload, returns the error.
 // Returns nil when the upload was successful.
-func UploadS3Object(ctx context.Context, c S3PutObjectAPI, bucket, key string, b []byte) error {
+func UploadS3Object(ctx context.Context, c S3PutObjectAPI, bucket, key string, r io.Reader) error {
 	_, err := c.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:               aws.String(bucket),
 		Key:                  aws.String(key),
-		Body:                 bytes.NewReader(b),
+		Body:                 r,
 		ServerSideEncryption: types.ServerSideEncryptionAes256,
 	})
 	return err

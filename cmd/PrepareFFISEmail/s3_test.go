@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -54,7 +55,7 @@ func createErrorResponseMap() map[int]*awsTransport.ResponseError {
 func TestUploadS3Object(t *testing.T) {
 	testBucketName := "test-bucket"
 	testObjectKey := "test/key"
-	testReader := []byte("hello!")
+	testReader := bytes.NewReader([]byte("hello!"))
 	testError := fmt.Errorf("oh no this is an error")
 
 	for _, tt := range []struct {
