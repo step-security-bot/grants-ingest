@@ -136,14 +136,13 @@ tasks:
         vars:
           LAMBDA_CMD: EnqueueFFISDownload
 
-<<<<<<< HEAD
   build-PrepareFFISEmail:
     desc: Compiles PrepareFFISEmail
     cmds:
       - task: build-lambda
         vars:
           LAMBDA_CMD: PrepareFFISEmail
-=======
+
   build-PersistGrantsGovXMLDB:
     desc: Compiles PersistGrantsGovXMLDB
     cmds:
@@ -164,4 +163,3 @@ tasks:
       - task: build-lambda
         vars:
           LAMBDA_CMD: SplitFFISSpreadsheet
->>>>>>> main

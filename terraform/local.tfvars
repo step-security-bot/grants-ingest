@@ -11,7 +11,7 @@ eventbridge_scheduler_enabled         = false
 ssm_deployment_parameters_path_prefix = "/grants-ingest/local"
 dynamodb_contributor_insights_enabled = false
 ffis_ingest_email_address             = "ffis-ingest@localhost.grants.usdr.dev"
-ffis_digest_email_address             = "thendrickson@usdigitalresponse.org" #"eableman@ffis.org"
+ffis_digest_email_address             = "eableman@ffis.org"
 ses_active_receipt_rule_set_enabled   = false
 
 additional_lambda_environment_variables = {
