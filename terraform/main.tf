@@ -44,8 +44,15 @@ data "aws_partition" "current" {}
 data "aws_caller_identity" "current" {}
 
 locals {
-  lambda_code_path         = coalesce(var.lambda_code_path, "${path.module}/..")
-  permissions_boundary_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${var.permissions_boundary_policy_name}"
+  lambda_code_path = coalesce(var.lambda_code_path, "${path.module}/..")
+  permissions_boundary_arn = !can(coalesce(var.permissions_boundary_policy_name)) ? null : join(":", [
+    "arn",
+    data.aws_partition.current.id,
+    "iam",
+    "",
+    data.aws_caller_identity.current.account_id,
+    "policy/${var.permissions_boundary_policy_name}"
+  ])
 
   datadog_extension_layer_arn = join(":", [
     "arn",
@@ -231,6 +238,26 @@ data "aws_iam_policy_document" "read_datadog_api_key_secret" {
   }
 }
 
+module "grants_prepared_dynamodb_table" {
+  source  = "cloudposse/dynamodb/aws"
+  version = "0.32.0"
+  context = module.this.context
+
+  name                          = "prepareddata"
+  hash_key                      = "grant_id"
+  table_class                   = "STANDARD"
+  enable_streams                = true
+  stream_view_type              = "NEW_AND_OLD_IMAGES"
+  enable_point_in_time_recovery = true
+  enable_encryption             = true
+}
+
+resource "aws_dynamodb_contributor_insights" "grants_prepared_dynamodb_main" {
+  count = var.dynamodb_contributor_insights_enabled ? 1 : 0
+
+  table_name = module.grants_prepared_dynamodb_table.table_name
+}
+
 resource "aws_ses_receipt_rule_set" "ffis_ingest" {
   rule_set_name = "${var.namespace}-ffis_ingest"
 }
@@ -369,9 +396,31 @@ resource "aws_s3_bucket_notification" "grant_source_data" {
     filter_suffix       = "/ffis/raw.eml"
   }
 
+  lambda_function {
+    lambda_function_arn = module.SplitFFISSpreadsheet.lambda_function_arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_prefix       = "sources/"
+    filter_suffix       = "/ffis/download.xlsx"
+  }
+
   depends_on = [
     module.SplitGrantsGovXMLDB,
     module.EnqueueFFISDownload,
+    module.SplitFFISSpreadsheet,
+  ]
+}
+
+resource "aws_s3_bucket_notification" "grant_prepared_data" {
+  bucket = module.grants_prepared_data_bucket.bucket_id
+
+  lambda_function {
+    lambda_function_arn = module.PersistGrantsGovXMLDB.lambda_function_arn
+    events              = ["s3:ObjectCreated:*"]
+    filter_suffix       = "/grants.gov/v2.xml"
+  }
+
+  depends_on = [
+    module.PersistGrantsGovXMLDB
   ]
 }
 
@@ -456,4 +505,70 @@ module "PrepareFFISEmail" {
   ffis_digest_email_address       = var.ffis_digest_email_address
   ffis_email_delivery_bucket_name = module.email_delivery_bucket.bucket_id
   grants_source_data_bucket_name  = module.grants_source_data_bucket.bucket_id
+}
+module "PersistGrantsGovXMLDB" {
+  source = "./modules/PersistGrantsGovXMLDB"
+
+  namespace                                    = var.namespace
+  function_name                                = "PersistGrantsGovXMLDB"
+  permissions_boundary_arn                     = local.permissions_boundary_arn
+  lambda_artifact_bucket                       = module.lambda_artifacts_bucket.bucket_id
+  log_retention_in_days                        = var.lambda_default_log_retention_in_days
+  log_level                                    = var.lambda_default_log_level
+  lambda_code_path                             = local.lambda_code_path
+  lambda_arch                                  = var.lambda_arch
+  additional_environment_variables             = local.lambda_environment_variables
+  additional_lambda_execution_policy_documents = local.lambda_execution_policies
+  lambda_layer_arns                            = local.lambda_layer_arns
+
+  grants_prepared_data_bucket_name    = module.grants_prepared_data_bucket.bucket_id
+  grants_prepared_dynamodb_table_name = module.grants_prepared_dynamodb_table.table_name
+  grants_prepared_dynamodb_table_arn  = module.grants_prepared_dynamodb_table.table_arn
+}
+
+module "DownloadFFISSpreadsheet" {
+  source                                       = "./modules/DownloadFFISSpreadsheet"
+  namespace                                    = var.namespace
+  function_name                                = "DownloadFFISSpreadsheet"
+  permissions_boundary_arn                     = local.permissions_boundary_arn
+  lambda_artifact_bucket                       = module.lambda_artifacts_bucket.bucket_id
+  log_retention_in_days                        = var.lambda_default_log_retention_in_days
+  log_level                                    = var.lambda_default_log_level
+  lambda_code_path                             = local.lambda_code_path
+  lambda_arch                                  = var.lambda_arch
+  additional_environment_variables             = local.lambda_environment_variables
+  additional_lambda_execution_policy_documents = local.lambda_execution_policies
+  lambda_layer_arns                            = local.lambda_layer_arns
+
+  source_queue_name           = aws_sqs_queue.ffis_downloads.name
+  download_target_bucket_name = module.grants_source_data_bucket.bucket_id
+
+  depends_on = [
+    module.grants_source_data_bucket,
+    aws_sqs_queue.ffis_downloads,
+  ]
+}
+
+module "SplitFFISSpreadsheet" {
+  source                                       = "./modules/SplitFFISSpreadsheet"
+  namespace                                    = var.namespace
+  function_name                                = "SplitFFISSpreadsheet"
+  permissions_boundary_arn                     = local.permissions_boundary_arn
+  lambda_artifact_bucket                       = module.lambda_artifacts_bucket.bucket_id
+  log_retention_in_days                        = var.lambda_default_log_retention_in_days
+  log_level                                    = var.lambda_default_log_level
+  lambda_code_path                             = local.lambda_code_path
+  lambda_arch                                  = var.lambda_arch
+  additional_environment_variables             = local.lambda_environment_variables
+  additional_lambda_execution_policy_documents = local.lambda_execution_policies
+  lambda_layer_arns                            = local.lambda_layer_arns
+
+  grants_source_data_bucket_name   = module.grants_source_data_bucket.bucket_id
+  grants_prepared_data_bucket_name = module.grants_prepared_data_bucket.bucket_id
+
+  depends_on = [
+    module.grants_source_data_bucket,
+    module.grants_prepared_data_bucket,
+    aws_sqs_queue.ffis_downloads,
+  ]
 }

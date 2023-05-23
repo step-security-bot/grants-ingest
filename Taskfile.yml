@@ -111,6 +111,9 @@ tasks:
       - build-SplitGrantsGovXMLDB
       - build-EnqueueFFISDownload
       - build-PrepareFFISEmail
+      - build-PersistGrantsGovXMLDB
+      - build-DownloadFFISSpreadsheet
+      - build-SplitFFISSpreadsheet
 
   build-DownloadGrantsGovDB:
     desc: Compiles DownloadGrantsGovDB
@@ -133,9 +136,32 @@ tasks:
         vars:
           LAMBDA_CMD: EnqueueFFISDownload
 
+<<<<<<< HEAD
   build-PrepareFFISEmail:
     desc: Compiles PrepareFFISEmail
     cmds:
       - task: build-lambda
         vars:
           LAMBDA_CMD: PrepareFFISEmail
+=======
+  build-PersistGrantsGovXMLDB:
+    desc: Compiles PersistGrantsGovXMLDB
+    cmds:
+      - task: build-lambda
+        vars:
+          LAMBDA_CMD: PersistGrantsGovXMLDB
+
+  build-DownloadFFISSpreadsheet:
+    desc: Compiles DownloadFFISSpreadsheet
+    cmds:
+      - task: build-lambda
+        vars:
+          LAMBDA_CMD: DownloadFFISSpreadsheet
+
+  build-SplitFFISSpreadsheet:
+    desc: Compiles SplitFFISSpreadsheet
+    cmds:
+      - task: build-lambda
+        vars:
+          LAMBDA_CMD: SplitFFISSpreadsheet
+>>>>>>> main
